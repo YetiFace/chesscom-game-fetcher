@@ -2,7 +2,7 @@
 
 This module will fetch all the games played at a specified time control for a specified period from all players rated above a defined rating and then compile them into a CSV file. This is quite a specialised use case. If you wish to instead download the games of an specific player you can, but you may be better served by my online tool for this use case, [Let's Do The Procedure](https://letsdotheprocedure.com/).
 
-You may also be interested in the [`chess.com` package](https://pypi.org/project/chess.com/]) by [saradzhyanartur](https://pypi.org/user/saradzhyanartur/), which this module uses to access the chesscom API.
+You may also be interested in the [chess.com package](https://pypi.org/project/chess.com/]) by [saradzhyanartur](https://pypi.org/user/saradzhyanartur/), which this module uses to access the chesscom API.
 
 ## Getting Started
 
