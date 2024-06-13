@@ -11,26 +11,26 @@ You may also be interested in the [`chess.com` package](https://pypi.org/project
 
 ### Basic Usage
 The module relies upon the `Fetcher` class, which uses its attributes to determine which games to fetch when its `fetch()` method is called.
-
-    from chesscom_game_fetcher import Fetcher
-    fetcher = Fetcher()
-    fetcher.fetch()
-    ## Default settings will fetch all 3+0 games from the current month
-    ## played between those rated 2800 and above.
-
+```
+from chesscom_game_fetcher import Fetcher
+fetcher = Fetcher()
+fetcher.fetch()
+## Default settings will fetch all 3+0 games from the current
+## month played between those rated 2800 and above.
+```
 Attributes can be set both during `Fetcher` initialisation on the instance itself. Check which settings your `Fetcher` instance will be using at any time by calling the `check` attribute.
+```
+from chesscom_game_fetcher import Fetcher
+fetcher = Fetcher(min_rating=3000, min_opponent=3000)
+fetcher.time_control = '180+1'
 
-    from chesscom_game_fetcher import Fetcher
-    fetcher = Fetcher(min_rating=3000, min_opponent=3000)
-    fetcher.time_control = '180+1'
+## This will print a table of the instance's fetch settings.
+fetcher.check
 
-    ## This will print a table of the instance's fetch settings.
-    fetcher.check
-
-    ## This will now fetch all 3+1 games from the current month
-    ## played between those rated 3000 and above.
-    fetcher.fetch()
-
+## This will now fetch all 3+1 games from the current month
+## played between those rated 3000 and above.
+fetcher.fetch()
+```
 ### Specialised Usage
 The individual methods `Fetcher.fetch()` calls can, if you wish, be used manually.
 This is how you fetch games from specific players.
@@ -43,13 +43,13 @@ returns a list of all those rated above `Fetcher.min_rating`
 - `year`        : year to search for games in. `YYYY` format.
 - `month`       : two digit string for the month to search for games in. `'MM'` format.
 
-
-    fetcher = Fetcher(min_rating=3000, min_opponent=3000)
-    player_list = fetcher.fetch_players()
-    games_list = fetcher.fetch_games(player_list, 2024, '04')
-    ## games_list will contain all games played between
-    ## those rated 3000 minimum in april 2024
-
+```
+fetcher = Fetcher(min_rating=3000, min_opponent=3000)
+player_list = fetcher.fetch_players()
+games_list = fetcher.fetch_games(player_list, 2024, '04')
+## games_list will contain all games played between
+## those rated 3000 minimum in april 2024
+```
 #### Create CSV
 `Fetcher.generate_csv(games_list)`
 Outputs a CSV file using a games_list created by `Fetcher.fetch_games`.
