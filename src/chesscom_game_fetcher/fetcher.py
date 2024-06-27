@@ -1,34 +1,55 @@
 import csv
+import json
 import re
 import requests
 from datetime import datetime
 from os import getcwd, path
-from chessdotcom import Client, get_player_games_by_month
 from dateutil.relativedelta import relativedelta
 from prettytable import PrettyTable
 
+class Obj():
+    def __init__(self, dict):
+        self.__dict__.update(dict)
+    @staticmethod
+    def resp2obj(resp):
+        data = resp.json()
+        return json.loads(json.dumps(data), object_hook=Obj)
+
 class Fetcher():
     def __init__(
-            self, min_rating=2800, min_opponent=2800, time_control='180', time_class='blitz',
+            self, min_rating=2800, min_opponent=2800, time_controls=['180'], leaderboard_time_class='blitz',
             start_date=datetime.now().strftime('%Y/%m'), end_date=datetime.now().strftime('%Y/%m'),
             csv_directory=getcwd(), csv_name=''
         ):
         self.LB_URL = "https://www.chess.com/callback/leaderboard/live/"
-        self.__min_rating = min_rating
-        self.__min_opponent = min_opponent
-        self.__time_control = time_control
-        self.__time_class = time_class
-        self.__start_date = start_date
-        self.__end_date = end_date
-        self.__csv_directory = csv_directory
-        self.__csv_name = csv_name
+        self.API_URL = "https://api.chess.com/pub/"
+        self.HEADERS = {"User-Agent":"email@address.here"}
+        self.GROUP_TIME_CONTROLS = ['blitz','rapid','bullet','daily','titled_tuesday']
+        defaults = dict(zip(self.__init__.__code__.co_varnames[1:],self.__init__.__defaults__))
+        self.__min_rating = defaults['min_rating']
+        self.__min_opponent = defaults['min_opponent']
+        self.__time_controls = defaults['time_controls']
+        self.__time_controls_specific = []
+        self.__time_controls_group = []
+        self.__leaderboard_time_class = defaults['leaderboard_time_class']
+        self.__start_date = defaults['start_date']
+        self.__end_date = defaults['end_date']
+        self.__csv_directory = defaults['csv_directory']
+        self.__csv_name = defaults['csv_name']
         self.__csv_default = False
         self.__csv_inhouse = False
+        params = locals()
+        for p in params:
+            if (
+                p not in defaults or
+                params[p] == defaults[p]
+            ):
+                continue
+            setattr(self, p, params[p])
         if not self.csv_name:
             self.__csv_default = True
             self.default_csv_name()
-        self.__check_exclude = ['csv_default', 'csv_inhouse', 'check_exclude', 'LB_URL']
-        self.set_client()
+        self.__check_exclude = ['csv_default', 'csv_inhouse', 'check_exclude', 'LB_URL', 'API_URL', 'HEADERS', 'GROUP_TIME_CONTROLS', 'time_controls_specific', 'time_controls_group']
     def __str__(self):
         return self.csv_name
     @property
@@ -52,32 +73,39 @@ class Fetcher():
         self.__csv_inhouse = True
         self.default_csv_name()
     @property
-    def time_class(self):
-        return self.__time_class
-    @time_class.setter
-    def time_class(self, new_value):
+    def leaderboard_time_class(self):
+        return self.__leaderboard_time_class
+    @leaderboard_time_class.setter
+    def leaderboard_time_class(self, new_value):
         if not isinstance(new_value, str):
-            print("ERROR: time_class must be a string")
+            print("ERROR: leaderboard_time_class must be a string")
             return;
         new_value = new_value.lower()
         if new_value not in ['blitz', 'bullet', 'rapid', 'daily']:
-            print("ERROR: time_class must be 'bullet', 'blitz', 'rapid' or 'daily'")
+            print("ERROR: leaderboard_time_class must be 'bullet', 'blitz', 'rapid' or 'daily'")
             return;
-        self.__time_class = new_value
+        self.__leaderboard_time_class = new_value
         self.__csv_inhouse = True
         self.default_csv_name()
     @property
-    def time_control(self):
-        return self.__time_control
-    @time_control.setter
-    def time_control(self, new_value):
-        if not isinstance(new_value, str):
-            print("ERROR: time_control must be a string.")
+    def time_controls(self):
+        return self.__time_controls
+    @time_controls.setter
+    def time_controls(self, new_value):
+        if isinstance(new_value, str):
+            new_value = new_value.replace(" ", "").split(",")
+        if not isinstance(new_value, list):
+            print("ERROR: time_controls must be a string or a list.")
             return;
-        if new_value[-2:] == "+0":
-            new_value = new_value[:-2]
-        print("Make sure to define time_control in seconds, e.g. 180 {0} 3".format(self.bold('NOT')))
-        self.__time_control = new_value
+        for control in new_value:
+            if control[-2:] == "+0":
+                control = control[:-2]
+            if control in self.GROUP_TIME_CONTROLS:
+                self.__time_controls_group.append(control)
+                continue
+            self.__time_controls_specific.append(control)
+        print("Make sure to define time_controls in seconds, e.g. 180 for 3+0 not {0} 3".format(self.bold('NOT')))
+        self.__time_controls = new_value
         self.__csv_inhouse = True
         self.default_csv_name()
     @property
@@ -143,23 +171,18 @@ class Fetcher():
             print('ERROR: month can not be greater than 12.')
             return False
         return True
-    def set_client(self, user_agent="CC Fetcher", tries=2, tts=4):
-        Client.request_config["headers"]["User-Agent"] = (user_agent)
-        Client.rate_limit_handler.tries = tries
-        Client.rate_limit_handler.tts = tts
     def default_csv_name(self):
         if not self.__csv_default:
             return
-        csv_name = "{0}_min{1}_".format(self.time_class, self.min_rating)
-        if self.min_opponent != self.min_rating:
-            csv_name += "minopp{0}_".format(self.min_opponent)
-        csv_name += self.start_date.replace('/','-')
+        csv_name = self.start_date.replace('/','') + "_"
         if self.end_date != self.start_date:
-            csv_name += "_" + self.end_date.replace('/','-')
+            csv_name += self.end_date.replace('/','') + "_"
+        csv_name = "chesscomgames_minrating_{0}".format(self.min_rating)
+        if self.min_opponent != self.min_rating:
+            csv_name += "_minopprating_{0}".format(self.min_opponent)
         csv_name += '.csv'
         self.__csv_inhouse = True
         self.csv_name = csv_name
-        print("Current CSV File Name: " + self.csv_name)
     @property
     def check(self):
         table = PrettyTable()
@@ -198,24 +221,26 @@ class Fetcher():
         players = []
         job_done = False
         page = 1
-        url = self.LB_URL + self.time_class + "?page="
+        url = self.LB_URL + self.leaderboard_time_class + "?page="
         while not job_done:
-            resp = requests.get(url + str(page))
-            job_done = self.process_leaderboard(resp.json(), players)
+            resp = Obj.resp2obj(requests.get(url + str(page)))
+            job_done = self.process_leaderboard(resp, players)
             page += 1
         return players
     def process_leaderboard(self, data, players):
-        for player in data['leaders']:
-            if player['score'] < self.min_rating:
+        for player in data.leaders:
+            if player.score < self.min_rating:
                 return True
-            players.append(player['user']['username'])
+            players.append(player.user.username)
         return False
     def fetch_games(self, players, year, month):
         uuids={}
         games = []
         for count, player in enumerate(players, start=1):
             print("{0} {1}/{2}".format(player, count, len(players)))
-            resp = get_player_games_by_month(player, year, month)
+            url = (self.API_URL + "player/{0}/games/{1}/{2}".format(player, year, month)).lower()
+            print(url)
+            resp = Obj.resp2obj(requests.get(url, headers=self.HEADERS, verify=False))
             for game in resp.games:
                 self.process_game(uuids, player, games, game)
         return games
@@ -223,8 +248,14 @@ class Fetcher():
         if (
             not data.rated or
             data.rules != 'chess' or
-            data.time_control != self.time_control or
             data.uuid in uuids
+        ):
+            return
+        if (
+            data.time_control not in self.__time_controls_specific and
+            data.time_class not in self.__time_controls_group and
+            not ("titled_tuesday" in self.__time_controls_group and
+            hasattr(data, 'tournament') and "titled-tuesday" in data.tournament)
         ):
             return
         uuids[data.uuid] = None
