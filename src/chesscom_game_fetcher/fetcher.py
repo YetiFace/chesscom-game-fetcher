@@ -218,7 +218,10 @@ class Fetcher():
         end_date = self.end_date.split('/')
         end_date = datetime(int(end_date[0]), int(end_date[1]), 1)
         games = []
-        while start_date.year != end_date.year or start_date.month <= end_date.month:
+        while (
+            end_date.year > start_date.year or
+            (start_date.year == end_date.year and start_date.month <= end_date.month)
+        ):
             games += self.fetch_games(players, start_date.year, start_date.strftime('%m'))
             start_date += relativedelta(months=+1)
         self.generate_csv(games)
