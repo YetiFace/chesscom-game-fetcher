@@ -253,7 +253,7 @@ class Fetcher():
                 print("Requests too fast, sleeping now.")
                 sleep(self.SLEEP_DELAY)
             request_time = datetime.now().timestamp()
-            resp = Obj.resp2obj(requests.get(url, headers=self.HEADERS))
+            resp = Obj.resp2obj(requests.get(url, headers=self.HEADERS, verify=False))
             for game in resp.games:
                 self.process_game(uuids, player, games, game)
         return games
