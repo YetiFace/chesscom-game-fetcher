@@ -3,6 +3,7 @@ import json
 import re
 import requests
 from datetime import datetime
+from time import sleep
 from os import getcwd, path
 from dateutil.relativedelta import relativedelta
 from prettytable import PrettyTable
@@ -25,11 +26,12 @@ class Fetcher():
         self.API_URL = "https://api.chess.com/pub/"
         self.HEADERS = {"User-Agent":"email@address.here"}
         self.GROUP_TIME_CONTROLS = ['blitz','rapid','bullet','daily','titled_tuesday']
+        self.SLEEP_DELAY = 0.5
         defaults = dict(zip(self.__init__.__code__.co_varnames[1:],self.__init__.__defaults__))
         self.__min_rating = defaults['min_rating']
         self.__min_opponent = defaults['min_opponent']
         self.__time_controls = defaults['time_controls']
-        self.__time_controls_specific = []
+        self.__time_controls_specific = defaults['time_controls']
         self.__time_controls_group = []
         self.__leaderboard_time_class = defaults['leaderboard_time_class']
         self.__start_date = defaults['start_date']
@@ -49,7 +51,10 @@ class Fetcher():
         if not self.csv_name:
             self.__csv_default = True
             self.default_csv_name()
-        self.__check_exclude = ['csv_default', 'csv_inhouse', 'check_exclude', 'LB_URL', 'API_URL', 'HEADERS', 'GROUP_TIME_CONTROLS', 'time_controls_specific', 'time_controls_group']
+        self.__check_exclude = [
+            'csv_default', 'csv_inhouse', 'check_exclude', 'LB_URL', 'API_URL',
+            'HEADERS', 'GROUP_TIME_CONTROLS', 'time_controls_specific',
+            'time_controls_group', 'SLEEP_DELAY' ]
     def __str__(self):
         return self.csv_name
     @property
@@ -205,6 +210,7 @@ class Fetcher():
             w = csv.DictWriter(f, keys)
             w.writeheader()
             w.writerows(games)
+        print("CSV created at: {0}".format(path.join(self.csv_directory, self.csv_name)))
     def fetch(self):
         players = self.fetch_players()
         start_date = self.start_date.split('/')
@@ -216,7 +222,6 @@ class Fetcher():
             games += self.fetch_games(players, start_date.year, start_date.strftime('%m'))
             start_date += relativedelta(months=+1)
         self.generate_csv(games)
-        print("CSV created at: {0}".format(path.join(self.csv_directory, self.csv_name)))
     def fetch_players(self):
         players = []
         job_done = False
@@ -236,11 +241,16 @@ class Fetcher():
     def fetch_games(self, players, year, month):
         uuids={}
         games = []
+        request_time = 0
         for count, player in enumerate(players, start=1):
             print("{0} {1}/{2}".format(player, count, len(players)))
             url = (self.API_URL + "player/{0}/games/{1}/{2}".format(player, year, month)).lower()
             print(url)
-            resp = Obj.resp2obj(requests.get(url, headers=self.HEADERS, verify=False))
+            if request_time + self.SLEEP_DELAY > datetime.now().timestamp():
+                print("Requests too fast, sleeping now.")
+                sleep(self.SLEEP_DELAY)
+            request_time = datetime.now().timestamp()
+            resp = Obj.resp2obj(requests.get(url, headers=self.HEADERS))
             for game in resp.games:
                 self.process_game(uuids, player, games, game)
         return games
